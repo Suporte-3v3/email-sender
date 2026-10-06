@@ -1,0 +1,14 @@
+# Repositório público: nada de segredo ou dado de infra aqui.
+.env
+.env.*
+!.env.example
+id_*
+known_hosts
+*.pem
+*.key
+
+# Saídas
+*.xlsx
+run.log
+/meter-report
+/email-sender
