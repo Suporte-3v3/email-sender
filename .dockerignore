@@ -1,0 +1,13 @@
+.git
+.github
+docs
+*.md
+.env
+.env.*
+id_*
+known_hosts
+*.pem
+*.key
+*.xlsx
+run.log
+meter-report
