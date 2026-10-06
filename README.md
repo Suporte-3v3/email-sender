@@ -2,7 +2,6 @@
 
 Relatório diário de consumo dos medidores (último − primeiro valor do dia), enviado por e-mail como xlsx. Binário Go one-shot, empacotado numa imagem `scratch` e disparado pelo cron do host com `docker run --rm`. Substitui o script Python interativo `cumulative_meter_reports/`.
 
-- Design: [docs/superpowers/specs/2026-10-06-meter-report-design.md](docs/superpowers/specs/2026-10-06-meter-report-design.md)
 - Andamento: issue #1
 
 ## Stack

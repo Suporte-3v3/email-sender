@@ -12,7 +12,6 @@ known_hosts
 run.log
 /meter-report
 /email-sender
-docs 
-docs/ 
-*docs/
-.docs
+
+# Specs e planos ficam só locais.
+/docs/
