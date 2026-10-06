@@ -56,3 +56,32 @@ func TestComputeLastDays(t *testing.T) {
 		})
 	}
 }
+
+func TestComputeExplicitRange(t *testing.T) {
+	sp := mustLoc(t, "America/Sao_Paulo")
+	now := time.Date(2026, 10, 6, 7, 0, 0, 0, sp)
+	tests := []struct {
+		name      string
+		from, to  time.Time
+		wantStart time.Time
+		wantEnd   time.Time
+	}{
+		{"exemplo da spec", civil(2026, 9, 1), civil(2026, 9, 30), civil(2026, 9, 1), civil(2026, 10, 1)},
+		{"um único dia", civil(2026, 9, 1), civil(2026, 9, 1), civil(2026, 9, 1), civil(2026, 9, 2)},
+		{"atravessa o ano", civil(2026, 12, 30), civil(2027, 1, 2), civil(2026, 12, 30), civil(2027, 1, 3)},
+		// Em 2018-11-04 a meia-noite não existiu em São Paulo (início do horário de verão).
+		{"dia sem meia-noite local", civil(2018, 11, 4), civil(2018, 11, 4), civil(2018, 11, 4), civil(2018, 11, 5)},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// ReportDays é ignorado quando há intervalo explícito.
+			c := &config.Config{ReportDays: 7, ReportFrom: tt.from, ReportTo: tt.to}
+			got := Compute(c, now, sp)
+			if !got.Start.Equal(tt.wantStart) || !got.End.Equal(tt.wantEnd) {
+				t.Errorf("Compute = [%s, %s), quero [%s, %s)",
+					got.Start.Format(time.DateOnly), got.End.Format(time.DateOnly),
+					tt.wantStart.Format(time.DateOnly), tt.wantEnd.Format(time.DateOnly))
+			}
+		})
+	}
+}
