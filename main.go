@@ -5,20 +5,17 @@ package main
 import (
 	"log"
 	"os"
-	"strings"
 	"time"
 	_ "time/tzdata" // a imagem scratch não tem /usr/share/zoneinfo
+
+	"github.com/Suporte-3v3/email-sender/internal/config"
 )
 
 func main() {
-	// Sem esta checagem, um TZ inválido cai em UTC silenciosamente e o
-	// período do relatório fica deslocado.
-	if tz := os.Getenv("TZ"); tz != "" {
-		if _, err := time.LoadLocation(strings.TrimPrefix(tz, ":")); err != nil {
-			log.Fatalf("TZ inválido %q: %v", tz, err)
-		}
+	cfg, err := config.Load(os.Getenv)
+	if err != nil {
+		log.Fatalf("configuração inválida:\n%v", err)
 	}
 
-	name, offset := time.Now().Zone()
-	log.Printf("meter-report: fuso %s (%s, UTC%+d)", time.Local, name, offset/3600)
+	log.Printf("meter-report: %d tabela(s), fuso %s", len(cfg.Tables), time.Local)
 }
