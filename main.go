@@ -9,6 +9,7 @@ import (
 	_ "time/tzdata" // a imagem scratch não tem /usr/share/zoneinfo
 
 	"github.com/Suporte-3v3/email-sender/internal/config"
+	"github.com/Suporte-3v3/email-sender/internal/period"
 )
 
 func main() {
@@ -17,5 +18,6 @@ func main() {
 		log.Fatalf("configuração inválida:\n%v", err)
 	}
 
-	log.Printf("meter-report: %d tabela(s), fuso %s", len(cfg.Tables), time.Local)
+	r := period.Compute(cfg, time.Now(), time.Local)
+	log.Printf("meter-report: %d tabela(s), período %s, fuso %s", len(cfg.Tables), r, time.Local)
 }
