@@ -85,3 +85,20 @@ func TestComputeExplicitRange(t *testing.T) {
 		})
 	}
 }
+
+func TestRangeFormat(t *testing.T) {
+	r := Range{Start: civil(2026, 9, 29), End: civil(2026, 10, 6)}
+	if got, want := r.SQLStart(), "2026-09-29 00:00:00"; got != want {
+		t.Errorf("SQLStart = %q, quero %q", got, want)
+	}
+	if got, want := r.SQLEnd(), "2026-10-06 00:00:00"; got != want {
+		t.Errorf("SQLEnd = %q, quero %q", got, want)
+	}
+	if got, want := r.String(), "2026-09-29 a 2026-10-05 (7 dias)"; got != want {
+		t.Errorf("String = %q, quero %q", got, want)
+	}
+	one := Range{Start: civil(2026, 10, 5), End: civil(2026, 10, 6)}
+	if got, want := one.String(), "2026-10-05 a 2026-10-05 (1 dia)"; got != want {
+		t.Errorf("String = %q, quero %q", got, want)
+	}
+}
