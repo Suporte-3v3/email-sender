@@ -35,7 +35,16 @@ jobs:
           size=$(docker image inspect -f '{{.Size}}' meter-report:ci)
           echo "imagem: $((size / 1024 / 1024)) MB ($size bytes)"
           test "$size" -le $((25 * 1024 * 1024))
+      # Sem as variáveis obrigatórias o binário sempre sai com exit 1 antes de
+      # conectar; o que se verifica é se o TZ foi aceito dentro do scratch.
       - name: Fuso embutido funciona no scratch
-        run: docker run --rm --platform linux/arm64 -e TZ=America/Sao_Paulo meter-report:ci
+        run: |
+          out=$(docker run --rm --platform linux/arm64 -e TZ=America/Sao_Paulo meter-report:ci 2>&1) && exit 1
+          echo "$out"
+          grep -q 'ausentes: SSH_HOST' <<<"$out"
+          ! grep -q 'TZ inválido' <<<"$out"
       - name: TZ inválido falha
-        run: "! docker run --rm --platform linux/arm64 -e TZ=Nada/Isso meter-report:ci"
+        run: |
+          out=$(docker run --rm --platform linux/arm64 -e TZ=Nada/Isso meter-report:ci 2>&1) && exit 1
+          echo "$out"
+          grep -q 'TZ inválido' <<<"$out"

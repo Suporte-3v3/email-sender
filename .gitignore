@@ -12,3 +12,7 @@ known_hosts
 run.log
 /meter-report
 /email-sender
+docs 
+docs/ 
+*docs/
+.docs
