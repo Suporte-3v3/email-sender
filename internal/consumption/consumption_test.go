@@ -1,6 +1,7 @@
 package consumption
 
 import (
+	"errors"
 	"maps"
 	"slices"
 	"testing"
@@ -134,5 +135,20 @@ func TestBuildKeepsTableOrder(t *testing.T) {
 	tables[0] = "X"
 	if got.Columns[0] != "B" {
 		t.Errorf("Columns compartilha memória com o argumento tables")
+	}
+}
+
+func TestBuildNoData(t *testing.T) {
+	// "B" nem aparece no mapa: tem que ser tratada como tabela vazia.
+	_, warnings, err := Build([]string{"A", "B"}, map[string][]Reading{"A": nil})
+	if !errors.Is(err, ErrNoData) {
+		t.Fatalf("err = %v, quero ErrNoData", err)
+	}
+	want := []string{
+		"A: sem dados no período; coluna preenchida com 0",
+		"B: sem dados no período; coluna preenchida com 0",
+	}
+	if !slices.Equal(warnings, want) {
+		t.Errorf("warnings = %q, quero %q", warnings, want)
 	}
 }
