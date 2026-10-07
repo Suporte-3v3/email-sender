@@ -150,3 +150,31 @@ func TestBuildFullPrecision(t *testing.T) {
 	}
 	t.Fatal("xl/worksheets/sheet1.xml não encontrado")
 }
+
+func TestBuildHeaderStyle(t *testing.T) {
+	b, err := Build(report)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f := open(t, b)
+
+	for _, cell := range []string{"A1", "E1"} {
+		id, err := f.GetCellStyle("Sheet1", cell)
+		if err != nil {
+			t.Fatal(err)
+		}
+		st, err := f.GetStyle(id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if st.Font == nil || !st.Font.Bold {
+			t.Errorf("%s não está em negrito", cell)
+		}
+		if len(st.Border) != 4 {
+			t.Errorf("%s tem %d bordas, quero 4", cell, len(st.Border))
+		}
+		if st.Alignment == nil || st.Alignment.Horizontal != "center" {
+			t.Errorf("%s não está centralizado", cell)
+		}
+	}
+}

@@ -22,6 +22,22 @@ func Build(r consumption.Report) ([]byte, error) {
 	f := excelize.NewFile()
 	defer f.Close()
 
+	// Mesmo estilo de cabeçalho do pandas: negrito, borda fina, centralizado.
+	border := []excelize.Border{
+		{Type: "left", Style: 1, Color: "000000"},
+		{Type: "top", Style: 1, Color: "000000"},
+		{Type: "right", Style: 1, Color: "000000"},
+		{Type: "bottom", Style: 1, Color: "000000"},
+	}
+	headerStyle, err := f.NewStyle(&excelize.Style{
+		Font:      &excelize.Font{Bold: true},
+		Border:    border,
+		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "top"},
+	})
+	if err != nil {
+		return nil, err
+	}
+
 	dateFmt := "yyyy-mm-dd"
 	dateStyle, err := f.NewStyle(&excelize.Style{CustomNumFmt: &dateFmt})
 	if err != nil {
@@ -30,6 +46,13 @@ func Build(r consumption.Report) ([]byte, error) {
 
 	header := append([]any{"Data"}, toAny(r.Columns)...)
 	if err := f.SetSheetRow(sheet, "A1", &header); err != nil {
+		return nil, err
+	}
+	last, err := excelize.CoordinatesToCellName(len(header), 1)
+	if err != nil {
+		return nil, err
+	}
+	if err := f.SetCellStyle(sheet, "A1", last, headerStyle); err != nil {
 		return nil, err
 	}
 
