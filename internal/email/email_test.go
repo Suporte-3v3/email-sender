@@ -10,11 +10,15 @@ import (
 	"mime/multipart"
 	"net"
 	"net/mail"
+	"os"
 	"slices"
 	"strings"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/Suporte-3v3/email-sender/internal/consumption"
+	"github.com/Suporte-3v3/email-sender/internal/xlsx"
 )
 
 var msg = Message{
@@ -218,5 +222,37 @@ func TestSendRequiresStartTLS(t *testing.T) {
 		if strings.HasPrefix(strings.ToUpper(c), "AUTH") || strings.HasPrefix(strings.ToUpper(c), "MAIL") {
 			t.Errorf("servidor sem STARTTLS recebeu %q", c)
 		}
+	}
+}
+
+// TestSendReal envia de verdade (critério de aceite da #8). Só roda com
+// EMAIL_SMOKE_TO definido; usa SMTP_USER e SMTP_PASSWORD do ambiente.
+func TestSendReal(t *testing.T) {
+	to := os.Getenv("EMAIL_SMOKE_TO")
+	if to == "" {
+		t.Skip("defina EMAIL_SMOKE_TO (e SMTP_USER/SMTP_PASSWORD) para enviar de verdade")
+	}
+	user, pass := os.Getenv("SMTP_USER"), os.Getenv("SMTP_PASSWORD")
+	if user == "" || pass == "" {
+		t.Fatal("EMAIL_SMOKE_TO exige SMTP_USER e SMTP_PASSWORD")
+	}
+	tables := []string{"SEL-751-1", "SFR_001_1"}
+	file, err := xlsx.Build(consumption.Report{
+		Days:    []string{"2026-09-29", "2026-09-30"},
+		Columns: tables,
+		Values:  [][]float64{{12.5, 3}, {0.25, 0}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := Message{
+		From:     user,
+		To:       []string{to},
+		Subject:  Subject(tables, "TESTE ação çãõ éíú"),
+		FileName: xlsx.FileName,
+		File:     file,
+	}
+	if err := Send(Server{Host: "smtp.gmail.com", Port: 587, User: user, Password: pass}, m); err != nil {
+		t.Fatal(err)
 	}
 }
