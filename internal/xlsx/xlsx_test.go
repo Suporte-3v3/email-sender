@@ -1,8 +1,12 @@
 package xlsx
 
 import (
+	"archive/zip"
 	"bytes"
+	"io"
 	"slices"
+	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/Suporte-3v3/email-sender/internal/consumption"
@@ -63,4 +67,86 @@ func TestBuildInvalidDay(t *testing.T) {
 	if err == nil {
 		t.Fatal("Build aceitou dia fora do formato AAAA-MM-DD")
 	}
+}
+
+func TestBuildDateIsExcelDate(t *testing.T) {
+	b, err := Build(report)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f := open(t, b)
+
+	raw, err := f.GetCellValue("Sheet1", "A2", excelize.Options{RawCellValue: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if raw != "46294" { // 2026-09-29 no sistema de datas 1900 do Excel
+		t.Errorf("A2 bruto = %q, quero o serial 46294", raw)
+	}
+	id, err := f.GetCellStyle("Sheet1", "A2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	st, err := f.GetStyle(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.CustomNumFmt == nil || *st.CustomNumFmt != "yyyy-mm-dd" {
+		t.Errorf("formato de A2 = %v, quero yyyy-mm-dd", st.CustomNumFmt)
+	}
+}
+
+func TestBuildValuesAreNumbers(t *testing.T) {
+	b, err := Build(report)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f := open(t, b)
+
+	for _, cell := range []string{"B2", "C2", "D2", "E2", "B3", "E3"} {
+		// Célula numérica não tem atributo t no XML; o excelize a reporta como Unset.
+		typ, err := f.GetCellType("Sheet1", cell)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if typ != excelize.CellTypeUnset && typ != excelize.CellTypeNumber {
+			t.Errorf("%s tem tipo %v, quero número", cell, typ)
+		}
+		raw, _ := f.GetCellValue("Sheet1", cell, excelize.Options{RawCellValue: true})
+		if _, err := strconv.ParseFloat(raw, 64); err != nil {
+			t.Errorf("%s = %q não é número: %v", cell, raw, err)
+		}
+	}
+}
+
+// O Python grava o float completo; o excelize também, mas só lendo o XML dá
+// para ver, porque o leitor dele arredonda para 15 dígitos.
+func TestBuildFullPrecision(t *testing.T) {
+	b, err := Build(report)
+	if err != nil {
+		t.Fatal(err)
+	}
+	zr, err := zip.NewReader(bytes.NewReader(b), int64(len(b)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, zf := range zr.File {
+		if zf.Name != "xl/worksheets/sheet1.xml" {
+			continue
+		}
+		rc, err := zf.Open()
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer rc.Close()
+		xml, err := io.ReadAll(rc)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(string(xml), "<v>0.20000000000000284</v>") {
+			t.Errorf("0.20000000000000284 foi arredondado no XML")
+		}
+		return
+	}
+	t.Fatal("xl/worksheets/sheet1.xml não encontrado")
 }
