@@ -5,14 +5,19 @@ package email
 import (
 	"bytes"
 	"crypto/rand"
+	"crypto/tls"
 	"encoding/base64"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"mime"
 	"mime/multipart"
 	"mime/quotedprintable"
+	"net"
+	"net/smtp"
 	"net/textproto"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -106,4 +111,77 @@ func (m Message) Build(now time.Time) ([]byte, error) {
 		return nil, err
 	}
 	return buf.Bytes(), nil
+}
+
+// Server é o servidor SMTP de envio.
+type Server struct {
+	Host     string
+	Port     int
+	User     string
+	Password string
+}
+
+const (
+	dialTimeout = 15 * time.Second
+	// ioTimeout limita a conversa SMTP inteira; o watchdog da #10 é a última
+	// barreira, não a única.
+	ioTimeout = 60 * time.Second
+)
+
+// ErrNoStartTLS indica que o servidor não oferece STARTTLS; nesse caso nada é
+// autenticado, para a senha nunca trafegar em claro.
+var ErrNoStartTLS = errors.New("servidor SMTP não oferece STARTTLS")
+
+// Send entrega m via s: STARTTLS obrigatório, AUTH PLAIN, MAIL FROM m.From,
+// RCPT TO para To + Cc.
+func Send(s Server, m Message) error {
+	msg, err := m.Build(time.Now())
+	if err != nil {
+		return fmt.Errorf("montar e-mail: %w", err)
+	}
+
+	addr := net.JoinHostPort(s.Host, strconv.Itoa(s.Port))
+	conn, err := net.DialTimeout("tcp", addr, dialTimeout)
+	if err != nil {
+		return fmt.Errorf("conectar em %s: %w", addr, err)
+	}
+	if err := conn.SetDeadline(time.Now().Add(ioTimeout)); err != nil {
+		conn.Close()
+		return err
+	}
+	c, err := smtp.NewClient(conn, s.Host)
+	if err != nil {
+		conn.Close()
+		return fmt.Errorf("SMTP %s: %w", addr, err)
+	}
+	defer c.Close()
+
+	if ok, _ := c.Extension("STARTTLS"); !ok {
+		return ErrNoStartTLS
+	}
+	if err := c.StartTLS(&tls.Config{ServerName: s.Host}); err != nil {
+		return fmt.Errorf("STARTTLS: %w", err)
+	}
+	if err := c.Auth(smtp.PlainAuth("", s.User, s.Password, s.Host)); err != nil {
+		return fmt.Errorf("autenticar no SMTP: %w", err)
+	}
+	if err := c.Mail(m.From); err != nil {
+		return fmt.Errorf("MAIL FROM: %w", err)
+	}
+	for _, r := range m.Recipients() {
+		if err := c.Rcpt(r); err != nil {
+			return fmt.Errorf("RCPT TO %s: %w", r, err)
+		}
+	}
+	w, err := c.Data()
+	if err != nil {
+		return fmt.Errorf("DATA: %w", err)
+	}
+	if _, err := w.Write(msg); err != nil {
+		return fmt.Errorf("enviar mensagem: %w", err)
+	}
+	if err := w.Close(); err != nil {
+		return fmt.Errorf("enviar mensagem: %w", err)
+	}
+	return c.Quit()
 }

@@ -1,14 +1,18 @@
 package email
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/base64"
+	"errors"
 	"io"
 	"mime"
 	"mime/multipart"
+	"net"
 	"net/mail"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -154,5 +158,65 @@ func TestBuildParts(t *testing.T) {
 
 	if _, err := mr.NextPart(); err != io.EOF {
 		t.Errorf("esperava 2 partes; NextPart = %v", err)
+	}
+}
+
+// fakeSMTP aceita uma conexão, anuncia ESMTP sem STARTTLS e grava os comandos
+// recebidos.
+func fakeSMTP(t *testing.T) (host string, port int, cmds func() []string) {
+	t.Helper()
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { ln.Close() })
+
+	var mu sync.Mutex
+	var got []string
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		conn, err := ln.Accept()
+		if err != nil {
+			return
+		}
+		defer conn.Close()
+		io.WriteString(conn, "220 fake ESMTP\r\n")
+		sc := bufio.NewScanner(conn)
+		for sc.Scan() {
+			line := sc.Text()
+			mu.Lock()
+			got = append(got, line)
+			mu.Unlock()
+			switch strings.ToUpper(strings.Fields(line + " x")[0]) {
+			case "EHLO":
+				io.WriteString(conn, "250-fake\r\n250 AUTH PLAIN\r\n")
+			case "QUIT":
+				io.WriteString(conn, "221 tchau\r\n")
+				return
+			default:
+				io.WriteString(conn, "250 ok\r\n")
+			}
+		}
+	}()
+	addr := ln.Addr().(*net.TCPAddr)
+	return "127.0.0.1", addr.Port, func() []string {
+		<-done
+		mu.Lock()
+		defer mu.Unlock()
+		return got
+	}
+}
+
+func TestSendRequiresStartTLS(t *testing.T) {
+	host, port, cmds := fakeSMTP(t)
+	err := Send(Server{Host: host, Port: port, User: "u", Password: "segredo"}, msg)
+	if !errors.Is(err, ErrNoStartTLS) {
+		t.Fatalf("Send = %v, quero ErrNoStartTLS", err)
+	}
+	for _, c := range cmds() {
+		if strings.HasPrefix(strings.ToUpper(c), "AUTH") || strings.HasPrefix(strings.ToUpper(c), "MAIL") {
+			t.Errorf("servidor sem STARTTLS recebeu %q", c)
+		}
 	}
 }
