@@ -8,6 +8,21 @@ on:
 jobs:
   go:
     runs-on: ubuntu-latest
+    # MariaDB real para os testes de integração de internal/db. 10.11 é a LTS
+    # mais próxima da Pi do banco; a senha só existe dentro deste job.
+    services:
+      mariadb:
+        image: mariadb:10.11
+        env:
+          MARIADB_ROOT_PASSWORD: test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd "healthcheck.sh --connect --innodb_initialized"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      MARIADB_TEST_ADDR: 127.0.0.1:3306
+      MARIADB_TEST_PASSWORD: test
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
